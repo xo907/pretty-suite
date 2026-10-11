@@ -59,7 +59,16 @@ install_node() {
   elif command -v wget >/dev/null 2>&1; then fetch() { wget -qO- "$1"; }
   else say "Neither curl nor wget is installed. Install one (for example: apt-get install -y curl), then run this again."; exit 1
   fi
-  if [ "$(id -u)" -eq 0 ]; then prefix=/usr/local; else prefix="$HOME/.local"; fi
+  # No root or sudo is assumed: use the first of these that can actually be written to, ending with a folder
+  # inside the app itself, which always can.
+  prefix=""
+  for candidate in /usr/local "$HOME/.local" "$PWD/.runtime"; do
+    if mkdir -p "$candidate/bin" "$candidate/lib" 2>/dev/null && [ -w "$candidate/bin" ] && [ -w "$candidate/lib" ]; then
+      prefix=$candidate
+      break
+    fi
+  done
+  [ -n "$prefix" ] || { say "Nowhere writable to put Node.js. Install Node 22.13 or newer yourself, then run this again."; exit 1; }
 
   base=https://nodejs.org/dist/latest-v22.x
   sums=$(fetch "$base/SHASUMS256.txt")
@@ -93,13 +102,10 @@ install_node() {
   export PATH
   hash -r 2>/dev/null || true
   say "Installed Node $(node -v) in $prefix."
-  case ":$ORIGINAL_PATH:" in
-    *":$prefix/bin:"*) ;;
-    *) say "Note: $prefix/bin is not on your PATH. Add it (export PATH=\"$prefix/bin:\$PATH\" in ~/.profile) to use 'npm start' later." ;;
-  esac
 }
 
-ORIGINAL_PATH=$PATH
+# A Node.js this installer put inside the app on an earlier run.
+if [ -x "$PWD/.runtime/bin/node" ]; then PATH="$PWD/.runtime/bin:$PATH"; export PATH; fi
 if ! node_ok; then
   if command -v node >/dev/null 2>&1; then found="Node $(node -v) is too old"; else found="Node.js is not installed"; fi
   GET_NODE=""
@@ -152,6 +158,14 @@ npm run build
 
 NODE_BIN=$(command -v node)
 HERE=$(pwd)
+# One way to start it that works whether or not Node is on the PATH.
+cat > start.sh <<STARTSCRIPT
+#!/bin/sh
+cd "$HERE" || exit 1
+exec "$NODE_BIN" --disable-warning=ExperimentalWarning server/index.js
+STARTSCRIPT
+chmod +x start.sh
+
 UNIT="[Unit]
 Description=Pretty Suite
 After=network-online.target
@@ -159,14 +173,20 @@ Wants=network-online.target
 
 [Service]
 WorkingDirectory=$HERE
-ExecStart=$NODE_BIN --disable-warning=ExperimentalWarning server/index.js
+ExecStart=$HERE/start.sh
 Restart=on-failure
 RestartSec=5
 "
 
-if [ -z "$SERVICE" ] && command -v systemctl >/dev/null 2>&1; then
+# A service needs systemd to be what runs this machine, which is not the case in many containers.
+HAS_SYSTEMD=""
+if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then HAS_SYSTEMD=yes; fi
+if [ -n "$HAS_SYSTEMD" ]; then
   ask SERVICE "Start it now and on every boot, as a service? (yes/no)" "no"
+else
+  SERVICE=no
 fi
+BACKGROUND="To keep it running after you log out:  nohup ./start.sh > pretty-suite.log 2>&1 &"
 case "$SERVICE" in
   y|Y|yes|YES|Yes)
     if [ "$(id -u)" -eq 0 ]; then
@@ -174,16 +194,24 @@ case "$SERVICE" in
       systemctl daemon-reload
       systemctl enable --now pretty-suite
       say "Running as a system service. Logs: journalctl -u pretty-suite -f"
-    else
+    elif systemctl --user show-environment >/dev/null 2>&1; then
       mkdir -p "$HOME/.config/systemd/user"
       printf '%s\n[Install]\nWantedBy=default.target\n' "$UNIT" > "$HOME/.config/systemd/user/pretty-suite.service"
       systemctl --user daemon-reload
       systemctl --user enable --now pretty-suite
-      loginctl enable-linger "$(id -un)" 2>/dev/null || say "To keep it running after you log out: sudo loginctl enable-linger $(id -un)"
-      say "Running as a service. Logs: journalctl --user -u pretty-suite -f"
+      say "Running as a service for your user. Logs: journalctl --user -u pretty-suite -f"
+      loginctl enable-linger "$(id -un)" 2>/dev/null ||
+        say "It will stop when you log out unless an administrator runs: loginctl enable-linger $(id -un)"
+    else
+      say "This account cannot run services here (no root, and no per-user systemd)."
+      say "Start it with:  ./start.sh"
+      say "$BACKGROUND"
     fi
     ;;
-  *) say "Start it with:  npm start" ;;
+  *)
+    say "Start it with:  ./start.sh"
+    say "$BACKGROUND"
+    ;;
 esac
 
 say ""

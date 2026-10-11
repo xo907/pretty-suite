@@ -8,3 +8,6 @@ data/
 
 *.log
 .node-download.*/
+start.sh
+.runtime/
+pretty-suite.log
