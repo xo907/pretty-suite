@@ -46,12 +46,13 @@ Created by [xo.st](https://xo.st).
 
 ## Quick start
 
-You need [Node.js](https://nodejs.org/en/download) 22.13 or newer, and git.
+You need git. The installer takes care of the rest: if Node.js 22.13 or newer is not there, it offers to install it
+(the official build from nodejs.org on Linux, winget on Windows).
 
 **Linux**
 
 ```bash
-git clone git@github.com:xo907/pretty-suite.git
+git clone https://github.com/xo907/pretty-suite.git
 cd pretty-suite
 ./install.sh
 ```
@@ -59,7 +60,7 @@ cd pretty-suite
 **Windows** (PowerShell)
 
 ```powershell
-git clone git@github.com:xo907/pretty-suite.git
+git clone https://github.com/xo907/pretty-suite.git
 cd pretty-suite
 powershell -ExecutionPolicy Bypass -File .\install.ps1
 ```

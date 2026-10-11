@@ -36,13 +36,66 @@ ask() {
   eval "$1=\${answer:-\$3}"
 }
 
-if ! command -v node >/dev/null 2>&1; then
-  say "Node.js is not installed. Pretty Suite needs Node 22.13 or newer: https://nodejs.org/en/download"
-  exit 1
-fi
-if ! node -e 'const [a, b] = process.versions.node.split(".").map(Number); process.exit(a > 22 || (a === 22 && b >= 13) ? 0 : 1)'; then
-  say "Node $(node -v) is too old. Pretty Suite needs Node 22.13 or newer: https://nodejs.org/en/download"
-  exit 1
+node_ok() {
+  command -v node >/dev/null 2>&1 &&
+    node -e 'const [a, b] = process.versions.node.split(".").map(Number); process.exit(a > 22 || (a === 22 && b >= 13) ? 0 : 1)'
+}
+
+# Node.js is the only thing Pretty Suite needs. When it is missing or too old, fetch the official build from
+# nodejs.org (checked against its published checksum) rather than whatever version the distribution carries.
+install_node() {
+  case "$(uname -s)" in
+    Linux) os=linux ;;
+    Darwin) os=darwin ;;
+    *) say "Install Node.js 22.13 or newer from https://nodejs.org/en/download, then run this again."; exit 1 ;;
+  esac
+  case "$(uname -m)" in
+    x86_64|amd64) arch=x64 ;;
+    aarch64|arm64) arch=arm64 ;;
+    armv7l) arch=armv7l ;;
+    *) say "No official Node.js build for $(uname -m). Install Node 22.13 or newer yourself, then run this again."; exit 1 ;;
+  esac
+  if command -v curl >/dev/null 2>&1; then fetch() { curl -fsSL "$1"; }
+  elif command -v wget >/dev/null 2>&1; then fetch() { wget -qO- "$1"; }
+  else say "Neither curl nor wget is installed. Install one (for example: apt-get install -y curl), then run this again."; exit 1
+  fi
+  if [ "$(id -u)" -eq 0 ]; then prefix=/usr/local; else prefix="$HOME/.local"; fi
+
+  base=https://nodejs.org/dist/latest-v22.x
+  sums=$(fetch "$base/SHASUMS256.txt")
+  file=$(printf '%s\n' "$sums" | awk -v want="-$os-$arch.tar.gz" 'index($2, want) { print $2; exit }')
+  [ -n "$file" ] || { say "Could not find a Node.js build for $os-$arch at $base."; exit 1; }
+  say "Downloading $file from nodejs.org…"
+  tmp=$(mktemp -d)
+  fetch "$base/$file" > "$tmp/$file"
+  expected=$(printf '%s\n' "$sums" | awk -v f="$file" '$2 == f { print $1 }')
+  if command -v sha256sum >/dev/null 2>&1; then actual=$(sha256sum "$tmp/$file" | awk '{ print $1 }')
+  else actual=$(shasum -a 256 "$tmp/$file" | awk '{ print $1 }')
+  fi
+  if [ "$expected" != "$actual" ]; then rm -rf "$tmp"; say "The download does not match nodejs.org's checksum. Nothing was installed."; exit 1; fi
+  mkdir -p "$prefix"
+  tar -xzf "$tmp/$file" -C "$prefix" --strip-components=1 --exclude=CHANGELOG.md --exclude=LICENSE --exclude=README.md
+  rm -rf "$tmp"
+  PATH="$prefix/bin:$PATH"
+  export PATH
+  hash -r 2>/dev/null || true
+  say "Installed Node $(node -v) in $prefix."
+  case ":$ORIGINAL_PATH:" in
+    *":$prefix/bin:"*) ;;
+    *) say "Note: $prefix/bin is not on your PATH. Add it (export PATH=\"$prefix/bin:\$PATH\" in ~/.profile) to use 'npm start' later." ;;
+  esac
+}
+
+ORIGINAL_PATH=$PATH
+if ! node_ok; then
+  if command -v node >/dev/null 2>&1; then found="Node $(node -v) is too old"; else found="Node.js is not installed"; fi
+  GET_NODE=""
+  ask GET_NODE "$found. Pretty Suite needs 22.13 or newer. Download it from nodejs.org now? (yes/no)" "yes"
+  case "$GET_NODE" in
+    y|Y|yes|YES|Yes) install_node ;;
+    *) say "Install Node.js 22.13 or newer from https://nodejs.org/en/download, then run this again."; exit 1 ;;
+  esac
+  node_ok || { say "Node is still not usable after installing. Check the messages above."; exit 1; }
 fi
 
 DEFAULT_DATA="${XDG_DATA_HOME:-$HOME/.local/share}/PrettySuite"

@@ -25,16 +25,22 @@ function Ask($question, $default) {
   return $answer.Trim()
 }
 
-$node = Get-Command node -ErrorAction SilentlyContinue
-if (-not $node) {
-  Write-Host 'Node.js is not installed. Pretty Suite needs Node 22.13 or newer: https://nodejs.org/en/download'
-  exit 1
+function NodeOk {
+  $found = Get-Command node -ErrorAction SilentlyContinue
+  return $found -and ([version]((node -v).TrimStart('v')) -ge [version]'22.13.0')
 }
-$version = [version]((node -v).TrimStart('v'))
-if ($version -lt [version]'22.13.0') {
-  Write-Host "Node $version is too old. Pretty Suite needs Node 22.13 or newer: https://nodejs.org/en/download"
-  exit 1
+
+# Node.js is the only thing Pretty Suite needs. When it is missing or too old, install the current LTS with winget.
+if (-not (NodeOk)) {
+  $manual = 'Install Node.js 22.13 or newer from https://nodejs.org/en/download, then run this again.'
+  if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { Write-Host "Node.js 22.13 or newer is needed. $manual"; exit 1 }
+  if ((Ask 'Node.js 22.13 or newer is needed. Install it now with winget? (yes/no)' 'yes') -notmatch '^y') { Write-Host $manual; exit 1 }
+  winget install --id OpenJS.NodeJS.LTS --exact --silent --accept-package-agreements --accept-source-agreements
+  # Pick up the PATH the installer just changed, without needing a new window.
+  $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
+  if (-not (NodeOk)) { Write-Host "Node is still not usable. Open a new PowerShell window and run this again, or: $manual"; exit 1 }
 }
+$node = Get-Command node
 
 Write-Host ''
 Write-Host 'Pretty Suite keeps three kinds of files. Press Enter to accept a default.'
