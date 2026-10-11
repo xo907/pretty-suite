@@ -66,15 +66,28 @@ install_node() {
   file=$(printf '%s\n' "$sums" | awk -v want="-$os-$arch.tar.gz" 'index($2, want) { print $2; exit }')
   [ -n "$file" ] || { say "Could not find a Node.js build for $os-$arch at $base."; exit 1; }
   say "Downloading $file from nodejs.org…"
-  tmp=$(mktemp -d)
-  fetch "$base/$file" > "$tmp/$file"
+  # Kept next to the app rather than in /tmp, which on small servers is often a tiny in-memory disk.
+  tmp=$(mktemp -d "$PWD/.node-download.XXXXXX")
+  if ! fetch "$base/$file" > "$tmp/$file"; then
+    rm -rf "$tmp"
+    say ""
+    say "The download could not be saved (about 30 MB, and about 200 MB more once unpacked into $prefix)."
+    say "That nearly always means the disk is full. Free space here and in $prefix:"
+    df -h "$PWD" "$prefix" 2>/dev/null || df -h
+    exit 1
+  fi
   expected=$(printf '%s\n' "$sums" | awk -v f="$file" '$2 == f { print $1 }')
   if command -v sha256sum >/dev/null 2>&1; then actual=$(sha256sum "$tmp/$file" | awk '{ print $1 }')
   else actual=$(shasum -a 256 "$tmp/$file" | awk '{ print $1 }')
   fi
   if [ "$expected" != "$actual" ]; then rm -rf "$tmp"; say "The download does not match nodejs.org's checksum. Nothing was installed."; exit 1; fi
   mkdir -p "$prefix"
-  tar -xzf "$tmp/$file" -C "$prefix" --strip-components=1 --exclude=CHANGELOG.md --exclude=LICENSE --exclude=README.md
+  if ! tar -xzf "$tmp/$file" -C "$prefix" --strip-components=1 --exclude=CHANGELOG.md --exclude=LICENSE --exclude=README.md; then
+    rm -rf "$tmp"
+    say "Unpacking into $prefix failed. If the disk is full, free some space and run this again:"
+    df -h "$prefix" 2>/dev/null || df -h
+    exit 1
+  fi
   rm -rf "$tmp"
   PATH="$prefix/bin:$PATH"
   export PATH
