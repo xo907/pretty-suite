@@ -1,0 +1,12 @@
+services:
+  pretty-suite:
+    build: .
+    container_name: pretty-suite
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:4477:4477"           # this machine only; put a reverse proxy with HTTPS in front for remote use
+    volumes:
+      - ./data:/data                    # database and saved sessions (small)
+      - /path/with/space:/content       # archived attachments (this is what grows)
+    environment:
+      - PRETTY_PASSWORD=change-me-please   # required: at least 8 characters

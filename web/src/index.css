@@ -1,0 +1,95 @@
+@import "tailwindcss";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+
+@theme {
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Geist Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --color-ink: #060607;
+  --color-raised: #0c0c0e;
+  --color-blurple: #5865f2;
+  /* The one accent. Everything else is a shade of grey. */
+  --color-accent-100: #ccfbf1;
+  --color-accent-200: #99f6e4;
+  --color-accent-300: #5eead4;
+  --color-accent-400: #2dd4bf;
+  --color-accent-500: #14b8a6;
+  --color-accent-600: #0f766e;
+  --color-accent-900: #042f2a;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--color-ink);
+  color: #f4f4f5;
+  font-family: var(--font-sans);
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* A faint glow at the top of the page, nothing more. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(50% 38% at 50% 0%, rgb(45 212 191 / 0.055), transparent 70%);
+}
+
+::selection {
+  background: var(--color-accent-400);
+  color: var(--color-accent-900);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent-400);
+  outline-offset: 2px;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(255 255 255 / 0.1) transparent;
+}
+
+@layer components {
+  .card {
+    @apply rounded-[18px] border border-white/[0.07] bg-[rgb(14_14_17/0.72)];
+  }
+  .btn {
+    @apply inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-full px-4 text-[13px] font-medium whitespace-nowrap transition-colors duration-200 select-none disabled:pointer-events-none disabled:opacity-35;
+  }
+  .btn-primary {
+    @apply bg-accent-400 text-accent-900 hover:bg-accent-300;
+  }
+  .btn-ghost {
+    @apply border border-white/[0.09] text-zinc-300 hover:border-white/[0.16] hover:bg-white/[0.04] hover:text-zinc-100;
+  }
+  .btn-danger {
+    @apply border border-red-400/30 bg-red-400/10 text-red-200 hover:bg-red-400/20;
+  }
+  .input {
+    @apply w-full rounded-[10px] border border-white/[0.08] bg-raised px-3 py-2 text-sm text-zinc-100 transition-colors outline-none placeholder:text-zinc-600 focus:border-accent-400/60;
+  }
+  .label {
+    @apply mb-1.5 block text-xs font-medium text-zinc-400;
+  }
+}
+
+input[type="range"] {
+  height: 1.25rem;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+.rise {
+  animation: rise 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
